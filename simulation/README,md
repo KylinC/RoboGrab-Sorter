@@ -1,0 +1,4 @@
+
+simulation/* is used for CoppeliaSim environment
+
+.dll file is used in Windows environment, whereas .so is prepared for linux
