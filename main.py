@@ -17,19 +17,17 @@ from trainer import Trainer
 from logger import Logger
 import utils
 
+# filter the pytorch warning
+import warnings
+warnings.filterwarnings("ignore")
 
 def main(args):
 
 
     # --------------- Setup options ---------------
-    is_sim = args.is_sim # Run in simulation?
-    obj_mesh_dir = os.path.abspath(args.obj_mesh_dir) if is_sim else None # Directory containing 3D mesh files (.obj) of objects to be added to simulation
-    num_obj = args.num_obj if is_sim else None # Number of objects to add to simulation
-    tcp_host_ip = args.tcp_host_ip if not is_sim else None # IP and port to robot arm as TCP client (UR5)
-    tcp_port = args.tcp_port if not is_sim else None
-    rtc_host_ip = args.rtc_host_ip if not is_sim else None # IP and port to robot arm as real-time client (UR5)
-    rtc_port = args.rtc_port if not is_sim else None
-    workspace_limits = np.asarray([[-0.824, -0.376], [-0.224, 0.224], [0.30, 0.9]]) # Cols: min max, Rows: x y z (define workspace limits in robot coordinates)
+    obj_mesh_dir = os.path.abspath(args.obj_mesh_dir)  # Directory containing 3D mesh files (.obj) of objects to be added to simulation
+    num_obj = args.num_obj  # Number of objects to add to simulation
+    workspace_limits = np.asarray([[-0.724, -0.276], [-0.224, 0.224], [0.30, 0.9]]) # Cols: min max, Rows: x y z (define workspace limits in robot coordinates)
     heightmap_resolution = args.heightmap_resolution # Meters per pixel of heightmap
     random_seed = args.random_seed
     force_cpu = args.force_cpu
@@ -58,11 +56,10 @@ def main(args):
 
 
     # Set random seed
-    np.random.seed(random_seed)
+    utils.seed_everything(random_seed)
 
     # Initialize pick-and-place system (camera and robot)
-    robot = Robot(is_sim, obj_mesh_dir, num_obj, workspace_limits,
-                  tcp_host_ip, tcp_port, rtc_host_ip, rtc_port,
+    robot = Robot(obj_mesh_dir, num_obj, workspace_limits,
                   is_testing, test_preset_cases, test_preset_file)
 
     # Initialize trainer
@@ -213,7 +210,7 @@ def main(args):
         iteration_time_0 = time.time()
 
         # Make sure simulation is still stable (if not, reset simulation)
-        if is_sim: robot.check_sim()
+        robot.check_sim()
 
         # Get latest RGB-D image
         color_img, depth_img = robot.get_camera_data()
@@ -232,21 +229,17 @@ def main(args):
         stuff_count = np.zeros(valid_depth_heightmap.shape)
         stuff_count[valid_depth_heightmap > 0.02] = 1
         empty_threshold = 300
-        if is_sim and is_testing:
+        if is_testing:
             empty_threshold = 10
-        if np.sum(stuff_count) < empty_threshold or (is_sim and no_change_count[0] + no_change_count[1] > 10):
+        if np.sum(stuff_count) < empty_threshold or no_change_count[0] + no_change_count[1] > 10:
             no_change_count = [0, 0]
-            if is_sim:
-                print('Not enough objects in view (value: %d)! Repositioning objects.' % (np.sum(stuff_count)))
-                robot.restart_sim()
-                robot.add_objects()
-                if is_testing: # If at end of test run, re-load original weights (before test run)
-                    trainer.model.load_state_dict(torch.load(snapshot_file))
-            else:
-                # print('Not enough stuff on the table (value: %d)! Pausing for 30 seconds.' % (np.sum(stuff_count)))
-                # time.sleep(30)
-                print('Not enough stuff on the table (value: %d)! Flipping over bin of objects...' % (np.sum(stuff_count)))
-                robot.restart_real()
+            print('Not enough objects in view (value: %d)! Repositioning objects.' % (np.sum(stuff_count)))
+            time.sleep(2)
+            robot.restart_sim()
+            robot.add_objects()
+            if is_testing: # If at end of test run, re-load original weights (before test run)
+                trainer.model.load_state_dict(torch.load(snapshot_file))
+
 
             trainer.clearance_log.append([trainer.iteration])
             logger.write_to_log('clearance', trainer.clearance_log)
@@ -409,15 +402,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train robotic agents to learn how to plan complementary pushing and grasping actions for manipulation with deep reinforcement learning in PyTorch.')
 
     # --------------- Setup options ---------------
-    parser.add_argument('--is_sim', dest='is_sim', action='store_true', default=False,                                    help='run in simulation?')
     parser.add_argument('--obj_mesh_dir', dest='obj_mesh_dir', action='store', default='objects/blocks',                  help='directory containing 3D mesh files (.obj) of objects to be added to simulation')
     parser.add_argument('--num_obj', dest='num_obj', type=int, action='store', default=10,                                help='number of objects to add to simulation')
-    parser.add_argument('--tcp_host_ip', dest='tcp_host_ip', action='store', default='100.127.7.223',                     help='IP address to robot arm as TCP client (UR5)')
-    parser.add_argument('--tcp_port', dest='tcp_port', type=int, action='store', default=30002,                           help='port to robot arm as TCP client (UR5)')
-    parser.add_argument('--rtc_host_ip', dest='rtc_host_ip', action='store', default='100.127.7.223',                     help='IP address to robot arm as real-time client (UR5)')
-    parser.add_argument('--rtc_port', dest='rtc_port', type=int, action='store', default=30003,                           help='port to robot arm as real-time client (UR5)')
     parser.add_argument('--heightmap_resolution', dest='heightmap_resolution', type=float, action='store', default=0.002, help='meters per pixel of heightmap')
-    parser.add_argument('--random_seed', dest='random_seed', type=int, action='store', default=1234,                      help='random seed for simulation and neural net initialization')
+    parser.add_argument('--random_seed', dest='random_seed', type=int, action='store', default=42,                      help='random seed for simulation and neural net initialization')
     parser.add_argument('--cpu', dest='force_cpu', action='store_true', default=False,                                    help='force code to run in CPU mode')
 
     # ------------- Algorithm options -------------

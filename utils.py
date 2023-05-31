@@ -3,6 +3,7 @@ import math
 import numpy as np
 import cv2
 import torch
+import random
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -308,6 +309,16 @@ class CrossEntropyLoss2d(nn.Module):
 
     def forward(self, inputs, targets):
         return self.nll_loss(F.log_softmax(inputs, dim=1), targets)
+
+def seed_everything(seed: int):
+    # 设置Python内置的随机数生成器的种子
+    random.seed(seed)
+
+    np.random.seed(seed)
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
 
 
 
