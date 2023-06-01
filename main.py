@@ -190,7 +190,11 @@ def main(args):
                     nonlocal_variables['push_success'] = robot.push(primitive_position, best_rotation_angle, workspace_limits)
                     print('Push successful: %r' % (nonlocal_variables['push_success']))
                 elif nonlocal_variables['primitive_action'] == 'grasp':
-                    nonlocal_variables['grasp_success'] = robot.grasp(primitive_position, best_rotation_angle, workspace_limits)
+                    if is_testing:
+                        nonlocal_variables['grasp_success'] = robot.dev_grasp_with_place(primitive_position, best_rotation_angle,
+                                                                          workspace_limits)
+                    else:
+                        nonlocal_variables['grasp_success'] = robot.grasp(primitive_position, best_rotation_angle, workspace_limits)
                     print('Grasp successful: %r' % (nonlocal_variables['grasp_success']))
 
                 nonlocal_variables['executing_action'] = False
