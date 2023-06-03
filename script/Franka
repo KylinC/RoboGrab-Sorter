@@ -31,7 +31,13 @@ python main.py --is_sim --obj_mesh_dir 'objects/blocks' --num_obj 10 \
     --load_snapshot --snapshot_file 'downloads/vpg-original-sim-pretrained-10-obj.pth' \
     --save_visualizations
 
-
+[156, 117, 95], # brown
+[242, 142, 43], # orange
+[237.0, 201.0, 72.0], # yellow
+[186, 176, 172], # gray
+[176, 122, 161], # purple
+[118, 183, 178], # cyan
+[255, 157, 167]
 
 
 

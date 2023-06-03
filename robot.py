@@ -12,18 +12,15 @@ class Robot(object):
                  is_testing, test_preset_cases, test_preset_file):
 
         self.workspace_limits = workspace_limits
+        # initial gripper position
+        self.gripper_init_pos = (-0.5, 0, 0.5)
 
         # Define colors for object meshes (Tableau palette)
         self.color_space = np.asarray([[78.0, 121.0, 167.0], # blue
                                        [89.0, 161.0, 79.0], # green
-                                       [156, 117, 95], # brown
-                                       [242, 142, 43], # orange
                                        [237.0, 201.0, 72.0], # yellow
-                                       [186, 176, 172], # gray
                                        [255.0, 87.0, 89.0], # red
-                                       [176, 122, 161], # purple
-                                       [118, 183, 178], # cyan
-                                       [255, 157, 167]])/255.0 #pink
+                                        ])/255.0 #pink
 
         # Read files in object mesh directory
         self.obj_mesh_dir = obj_mesh_dir
@@ -32,7 +29,7 @@ class Robot(object):
 
         # Randomly choose objects to add to scene
         self.obj_mesh_ind = np.random.randint(0, len(self.mesh_list), size=self.num_obj)
-        self.obj_mesh_color = self.color_space[np.asarray(range(self.num_obj)) % 10, :]
+        self.obj_mesh_color = self.color_space[np.asarray(range(self.num_obj)) % 4, :]
 
         # Make sure to have the server side running in V-REP:
         # in a child script of a V-REP scene, add following command
@@ -63,6 +60,19 @@ class Robot(object):
 
         # Setup virtual camera in simulation
         self.setup_sim_camera()
+
+        # Save the joints position, once we execute go_home() function, Franka go to the initial posture
+        self.franka_joints_handle = []
+        self.franka_initial_joint_positions = []
+        for i in range(7):
+            _, joint_handle = vrep.simxGetObjectHandle(self.sim_client, 'joint' + str(i+1), vrep.simx_opmode_blocking)
+            self.franka_joints_handle.append(joint_handle)
+        for joint_handle in self.franka_joints_handle:
+            _, joint_position = vrep.simxGetJointPosition(self.sim_client, joint_handle, vrep.simx_opmode_blocking)
+            self.franka_initial_joint_positions.append(joint_position)
+
+        _, self.car_handle = vrep.simxGetObjectHandle(self.sim_client, 'Car', vrep.simx_opmode_blocking)
+
 
         # If testing, read object meshes and poses from test case file
         if self.is_testing and self.test_preset_cases:
@@ -141,7 +151,7 @@ class Robot(object):
     def restart_sim(self):
 
         sim_ret, self.UR5_target_handle = vrep.simxGetObjectHandle(self.sim_client,'UR5_target',vrep.simx_opmode_blocking)
-        vrep.simxSetObjectPosition(self.sim_client, self.UR5_target_handle, -1, (-0.5,0,0.5), vrep.simx_opmode_blocking)
+        vrep.simxSetObjectPosition(self.sim_client, self.UR5_target_handle, -1, self.gripper_init_pos, vrep.simx_opmode_blocking)
         vrep.simxStopSimulation(self.sim_client, vrep.simx_opmode_blocking)
         vrep.simxStartSimulation(self.sim_client, vrep.simx_opmode_blocking)
         sim_ret, self.RG2_tip_handle = vrep.simxGetObjectHandle(self.sim_client, 'UR5_tip', vrep.simx_opmode_blocking)
@@ -257,68 +267,6 @@ class Robot(object):
         return color_img, depth_img
 
 
-    def parse_tcp_state_data(self, state_data, subpackage):
-
-        # Read package header
-        data_bytes = bytearray()
-        data_bytes.extend(state_data)
-        data_length = struct.unpack("!i", data_bytes[0:4])[0];
-        robot_message_type = data_bytes[4]
-        assert(robot_message_type == 16)
-        byte_idx = 5
-
-        # Parse sub-packages
-        subpackage_types = {'joint_data' : 1, 'cartesian_info' : 4, 'force_mode_data' : 7, 'tool_data' : 2}
-        while byte_idx < data_length:
-            # package_length = int.from_bytes(data_bytes[byte_idx:(byte_idx+4)], byteorder='big', signed=False)
-            package_length = struct.unpack("!i", data_bytes[byte_idx:(byte_idx+4)])[0]
-            byte_idx += 4
-            package_idx = data_bytes[byte_idx]
-            if package_idx == subpackage_types[subpackage]:
-                byte_idx += 1
-                break
-            byte_idx += package_length - 4
-
-        def parse_joint_data(data_bytes, byte_idx):
-            actual_joint_positions = [0,0,0,0,0,0]
-            target_joint_positions = [0,0,0,0,0,0]
-            for joint_idx in range(6):
-                actual_joint_positions[joint_idx] = struct.unpack('!d', data_bytes[(byte_idx+0):(byte_idx+8)])[0]
-                target_joint_positions[joint_idx] = struct.unpack('!d', data_bytes[(byte_idx+8):(byte_idx+16)])[0]
-                byte_idx += 41
-            return actual_joint_positions
-
-        def parse_cartesian_info(data_bytes, byte_idx):
-            actual_tool_pose = [0,0,0,0,0,0]
-            for pose_value_idx in range(6):
-                actual_tool_pose[pose_value_idx] = struct.unpack('!d', data_bytes[(byte_idx+0):(byte_idx+8)])[0]
-                byte_idx += 8
-            return actual_tool_pose
-
-        def parse_tool_data(data_bytes, byte_idx):
-            byte_idx += 2
-            tool_analog_input2 = struct.unpack('!d', data_bytes[(byte_idx+0):(byte_idx+8)])[0]
-            return tool_analog_input2
-
-        parse_functions = {'joint_data' : parse_joint_data, 'cartesian_info' : parse_cartesian_info, 'tool_data' : parse_tool_data}
-        return parse_functions[subpackage](data_bytes, byte_idx)
-
-    def parse_rtc_state_data(self, state_data):
-
-        # Read package header
-        data_bytes = bytearray()
-        data_bytes.extend(state_data)
-        data_length = struct.unpack("!i", data_bytes[0:4])[0];
-        assert(data_length == 812)
-        byte_idx = 4 + 8 + 8*48 + 24 + 120
-        TCP_forces = [0,0,0,0,0,0]
-        for joint_idx in range(6):
-            TCP_forces[joint_idx] = struct.unpack('!d', data_bytes[(byte_idx+0):(byte_idx+8)])[0]
-            byte_idx += 8
-
-        return TCP_forces
-
-
     def close_gripper(self, asynch=False):
         gripper_motor_velocity = -0.5
         gripper_motor_force = 100
@@ -364,19 +312,15 @@ class Robot(object):
             sim_ret, UR5_target_position = vrep.simxGetObjectPosition(self.sim_client,self.UR5_target_handle,-1,vrep.simx_opmode_blocking)
         vrep.simxSetObjectPosition(self.sim_client,self.UR5_target_handle,-1,(tool_position[0],tool_position[1],tool_position[2]),vrep.simx_opmode_blocking)
 
+    def car_dynamic_enable(self):
+        vrep.simxSetObjectIntParameter(self.sim_client, self.car_handle, vrep.sim_shapeintparam_static, 0, vrep.simx_opmode_oneshot)
 
 
     def go_home(self):
 
-        self.move_joints(self.home_joint_config)
-
-
-    # Note: must be preceded by close_gripper()
-    def check_grasp(self):
-
-        state_data = self.get_state()
-        tool_analog_input2 = self.parse_tcp_state_data(state_data, 'tool_data')
-        return tool_analog_input2 > 0.26
+        self.move_to(self.gripper_init_pos,None)
+        for i, joint_handle in enumerate(self.franka_joints_handle):
+            vrep.simxSetJointPosition(self.sim_client, joint_handle, self.franka_initial_joint_positions[i], vrep.simx_opmode_blocking)
 
 
     # Primitives ----------------------------------------------------------
@@ -609,78 +553,9 @@ class Robot(object):
         self.move_to(location_above_place_target, None)
 
         place_success = True
+
+        self.close_gripper()
+        self.go_home()
+
         return place_success
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# JUNK
-
-# command = "movel(p[%f,%f,%f,%f,%f,%f],0.5,0.2,0,0,a=1.2,v=0.25)\n" % (-0.5,-0.2,0.1,2.0171,2.4084,0)
-
-# import socket
-
-# HOST = "192.168.1.100"
-# PORT = 30002
-# s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-# s.connect((HOST,PORT))
-
-# j0 = 0
-# j1 = -3.1415/2
-# j2 = 3.1415/2
-# j3 = -3.1415/2
-# j4 = -3.1415/2
-# j5 = 0;
-
-# joint_acc = 1.2
-# joint_vel = 0.25
-
-# # command = "movej([%f,%f,%f,%f,%f,%f],a=%f,v=%f)\n" % (j0,j1,j2,j3,j4,j5,joint_acc,joint_vel)
-
-
-
-# #
-
-
-# # True closes
-# command = "set_digital_out(8,True)\n"
-
-# s.send(str.encode(command))
-# data = s.recv(1024)
-
-
-
-# s.close()
-# print("Received",repr(data))
-
-
-
-
-
-# print()
-
-# String.Format ("movej([%f,%f,%f,%f,%f, %f], a={6}, v={7})\n", j0, j1, j2, j3, j4, j5, a, v);

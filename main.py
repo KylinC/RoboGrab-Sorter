@@ -104,7 +104,7 @@ def main(args):
                         if best_push_conf > 2*best_grasp_conf:
                             nonlocal_variables['primitive_action'] = 'push'
                     else:
-                        if best_push_conf > best_grasp_conf:
+                        if best_push_conf > 0.9*best_grasp_conf:
                             nonlocal_variables['primitive_action'] = 'push'
                     explore_actions = np.random.uniform() < explore_prob
                     if explore_actions: # Exploitation (do best action) vs exploration (do other action)
@@ -151,6 +151,7 @@ def main(args):
                 best_rotation_angle = np.deg2rad(nonlocal_variables['best_pix_ind'][0]*(360.0/trainer.model.num_rotations))
                 best_pix_x = nonlocal_variables['best_pix_ind'][2]
                 best_pix_y = nonlocal_variables['best_pix_ind'][1]
+                print(color_heightmap[nonlocal_variables['best_pix_ind'][1]][nonlocal_variables['best_pix_ind'][2]])
                 primitive_position = [best_pix_x * heightmap_resolution + workspace_limits[0][0], best_pix_y * heightmap_resolution + workspace_limits[1][0], valid_depth_heightmap[best_pix_y][best_pix_x] + workspace_limits[2][0]]
 
                 # If pushing, adjust start position, and make sure z value is safe and not too low
@@ -219,6 +220,7 @@ def main(args):
         # Get latest RGB-D image
         color_img, depth_img = robot.get_camera_data()
         depth_img = depth_img * robot.cam_depth_scale # Apply depth scale from calibration
+        # print(depth_img.shape)
 
         # Get heightmap from RGB-D image (by re-projecting 3D point cloud)
         color_heightmap, depth_heightmap = utils.get_heightmap(color_img, depth_img, robot.cam_intrinsics, robot.cam_pose, workspace_limits, heightmap_resolution)
