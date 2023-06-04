@@ -71,7 +71,7 @@ class Robot(object):
             _, joint_position = vrep.simxGetJointPosition(self.sim_client, joint_handle, vrep.simx_opmode_blocking)
             self.franka_initial_joint_positions.append(joint_position)
 
-        _, self.car_handle = vrep.simxGetObjectHandle(self.sim_client, 'Car_body', vrep.simx_opmode_blocking)
+        _, self.car_handle = vrep.simxGetObjectHandle(self.sim_client, 'Car', vrep.simx_opmode_blocking)
         sim_ret, self.left_motor_handle = vrep.simxGetObjectHandle(self.sim_client, 'LeftMotor', vrep.simx_opmode_blocking)
         sim_ret, self.right_motor_handle = vrep.simxGetObjectHandle(self.sim_client, 'RightMotor', vrep.simx_opmode_blocking)
         sim_ret, self.car_body_handle = vrep.simxGetObjectHandle(self.sim_client, 'Car_body_visual', vrep.simx_opmode_blocking)
@@ -155,12 +155,11 @@ class Robot(object):
 
 
     def restart_sim(self):
-        # self.car_dynamic_disable()
+
         sim_ret, self.UR5_target_handle = vrep.simxGetObjectHandle(self.sim_client,'UR5_target',vrep.simx_opmode_blocking)
         vrep.simxSetObjectPosition(self.sim_client, self.UR5_target_handle, -1, self.gripper_init_pos, vrep.simx_opmode_blocking)
         vrep.simxStopSimulation(self.sim_client, vrep.simx_opmode_blocking)
         vrep.simxStartSimulation(self.sim_client, vrep.simx_opmode_blocking)
-        # self.close_gripper()
         sim_ret, self.RG2_tip_handle = vrep.simxGetObjectHandle(self.sim_client, 'UR5_tip', vrep.simx_opmode_blocking)
         sim_ret, gripper_position = vrep.simxGetObjectPosition(self.sim_client, self.RG2_tip_handle, -1, vrep.simx_opmode_blocking)
         while gripper_position[2] > 0.7: # V-REP bug requiring multiple starts and stops to restart
@@ -320,12 +319,7 @@ class Robot(object):
         vrep.simxSetObjectPosition(self.sim_client,self.UR5_target_handle,-1,(tool_position[0],tool_position[1],tool_position[2]),vrep.simx_opmode_blocking)
 
     def car_dynamic_enable(self):
-        _, self.car_handle = vrep.simxGetObjectHandle(self.sim_client, 'Car_body', vrep.simx_opmode_blocking)
-        vrep.simxSetObjectIntParameter(self.sim_client, self.car_handle, vrep.sim_shapeintparam_static, 0, vrep.simx_opmode_blocking)
-
-    def car_dynamic_disable(self):
-        _, self.car_handle = vrep.simxGetObjectHandle(self.sim_client, 'Car_body', vrep.simx_opmode_blocking)
-        vrep.simxSetObjectIntParameter(self.sim_client, self.car_handle, vrep.sim_shapeintparam_static, 1, vrep.simx_opmode_blocking)
+        vrep.simxSetObjectIntParameter(self.sim_client, self.car_handle, vrep.sim_shapeintparam_static, 0, vrep.simx_opmode_oneshot)
 
 
     def go_home(self):
@@ -458,20 +452,13 @@ class Robot(object):
 
         # Move the grasped object elsewhere
         if grasp_success:
-            # drop_x = (self.workspace_limits[0][1] - self.workspace_limits[0][0] - 0.1) * np.random.random_sample() + \
-            #          self.workspace_limits[0][0] + 0
-            # drop_y = (self.workspace_limits[1][1] - self.workspace_limits[1][0] - 0.1) * np.random.random_sample() + \
-            #          self.workspace_limits[1][0] + 0
-            # object_position = [drop_x, drop_y, 0.31]
-            #
-            # self.place(object_position,0,workspace_limits)
-            self.go_home()
-            time.sleep(2)
-            # self.car_dynamic_enable()
-            self.car_move_to("tar_green")
-            time.sleep(2)
-            self.car_move_to("sou")
-            # self.car_dynamic_disable()
+            drop_x = (self.workspace_limits[0][1] - self.workspace_limits[0][0] - 0.1) * np.random.random_sample() + \
+                     self.workspace_limits[0][0] + 0
+            drop_y = (self.workspace_limits[1][1] - self.workspace_limits[1][0] - 0.1) * np.random.random_sample() + \
+                     self.workspace_limits[1][0] + 0
+            object_position = [drop_x, drop_y, 0.31]
+
+            self.place(object_position,0,workspace_limits)
 
 
         return grasp_success
@@ -741,6 +728,25 @@ class Robot(object):
 
             _, position = vrep.simxGetObjectPosition(self.sim_client, self.car_body_handle, -1, vrep.simx_opmode_blocking)
             x, y, z = position
+        self.stand()
+        time.sleep(0.1)
+        _, position = vrep.simxGetObjectPosition(self.sim_client, self.car_body_handle, -1, vrep.simx_opmode_blocking)
+        x, y, z = position
+        _, position_uni = vrep.simxGetObjectPosition(self.sim_client, self.universal_handle, -1,
+                                                     vrep.simx_opmode_blocking)
+        x_uni, y_uni, z_uni = position_uni
+        while abs(x_uni - x) > 0.002:
+            if x_uni - x > 0:
+                self.rotate_right(abs(x_uni - x) * 5)
+            else:
+                self.rotate_left(abs(x_uni - x) * 5)
+            time.sleep(0.1)
+            _, position = vrep.simxGetObjectPosition(self.sim_client, self.car_body_handle, -1,
+                                                     vrep.simx_opmode_blocking)
+            x, y, z = position
+            _, position_uni = vrep.simxGetObjectPosition(self.sim_client, self.universal_handle, -1,
+                                                         vrep.simx_opmode_blocking)
+            x_uni, y_uni, z_uni = position_uni
         self.stand()
         time.sleep(0.1)
 

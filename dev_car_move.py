@@ -7,7 +7,7 @@ import time
 import cv2
 import os
 import random
-from robot import Robot
+from dev_robot import Robot
 import utils
 
 
@@ -26,6 +26,9 @@ np.random.seed(random_seed)
 robot = Robot(obj_mesh_dir, num_obj, workspace_limits,
               True, False, None)
 
-robot.car_dynamic_enable()
+# robot.car_dynamic_enable()
 
-robot.move_to((-0.5, 0.3, 0.6),None)
+print(1)
+
+robot.car_move_to("tar_green")
+robot.car_move_to("sou")
