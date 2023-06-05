@@ -151,7 +151,8 @@ def main(args):
                 best_rotation_angle = np.deg2rad(nonlocal_variables['best_pix_ind'][0]*(360.0/trainer.model.num_rotations))
                 best_pix_x = nonlocal_variables['best_pix_ind'][2]
                 best_pix_y = nonlocal_variables['best_pix_ind'][1]
-                print(color_heightmap[nonlocal_variables['best_pix_ind'][1]][nonlocal_variables['best_pix_ind'][2]])
+                excute_color=color_heightmap[nonlocal_variables['best_pix_ind'][1]][nonlocal_variables['best_pix_ind'][2]]
+                print("The excute color is: ",robot.dev_color_match(excute_color))
                 primitive_position = [best_pix_x * heightmap_resolution + workspace_limits[0][0], best_pix_y * heightmap_resolution + workspace_limits[1][0], valid_depth_heightmap[best_pix_y][best_pix_x] + workspace_limits[2][0]]
 
                 # If pushing, adjust start position, and make sure z value is safe and not too low
@@ -193,7 +194,7 @@ def main(args):
                 elif nonlocal_variables['primitive_action'] == 'grasp':
                     if is_testing:
                         nonlocal_variables['grasp_success'] = robot.dev_grasp_with_place(primitive_position, best_rotation_angle,
-                                                                          workspace_limits)
+                                                                          workspace_limits,excute_color)
                     else:
                         nonlocal_variables['grasp_success'] = robot.grasp(primitive_position, best_rotation_angle, workspace_limits)
                     print('Grasp successful: %r' % (nonlocal_variables['grasp_success']))

@@ -14,13 +14,24 @@ class Robot(object):
         self.workspace_limits = workspace_limits
         # initial gripper position
         self.gripper_init_pos = (-0.5, 0, 0.5)
+        self.gripper_init_pos_custom = None
 
         # Define colors for object meshes (Tableau palette)
         self.color_space = np.asarray([[78.0, 121.0, 167.0], # blue
                                        [89.0, 161.0, 79.0], # green
                                        [237.0, 201.0, 72.0], # yellow
                                        [255.0, 87.0, 89.0], # red
-                                        ])/255.0 #pink
+                                        ])/255.0
+        self.color_name = ['blue','green','yellow','red']
+        self.color2place = {'blue':[1.675,-1.9,0.31],
+                            'green':[1.325,-1.9,0.31],
+                            'yellow':[2.025,-1.9,0.31],
+                            'red':[0.975,-1.9,0.31]}
+        self.color2workshop = {'blue':np.asarray([[1.525, 1.825], [-2.05, -1.75], [0.32, 0.33]]), # Cols: min max, Rows: x y z (define workspace limits in robot coordinates)
+                            'green':np.asarray([[1.175, 1.475], [-2.05, -1.75], [0.32, 0.33]]),
+                            'yellow':np.asarray([[1.875, 2.175], [-2.05, -1.75], [0.32, 0.33]]),
+                            'red':np.asarray([[0.825, 1.125], [-2.05, -1.75], [0.32, 0.33]])
+                               }
 
         # Read files in object mesh directory
         self.obj_mesh_dir = obj_mesh_dir
@@ -64,6 +75,7 @@ class Robot(object):
         # Save the joints position, once we execute go_home() function, Franka go to the initial posture
         self.franka_joints_handle = []
         self.franka_initial_joint_positions = []
+        self.franka_initial_joint_positions_custom = []
         for i in range(7):
             _, joint_handle = vrep.simxGetObjectHandle(self.sim_client, 'joint' + str(i+1), vrep.simx_opmode_blocking)
             self.franka_joints_handle.append(joint_handle)
@@ -334,6 +346,19 @@ class Robot(object):
         for i, joint_handle in enumerate(self.franka_joints_handle):
             vrep.simxSetJointPosition(self.sim_client, joint_handle, self.franka_initial_joint_positions[i], vrep.simx_opmode_blocking)
 
+    def define_custom_home(self):
+        _, self.gripper_init_pos_custom = vrep.simxGetObjectPosition(self.sim_client, self.UR5_target_handle, -1,
+                                                                  vrep.simx_opmode_blocking)
+        for joint_handle in self.franka_joints_handle:
+            _, joint_position = vrep.simxGetJointPosition(self.sim_client, joint_handle, vrep.simx_opmode_blocking)
+            self.franka_initial_joint_positions_custom.append(joint_position)
+
+    def go_costom_home(self):
+        if len(self.franka_initial_joint_positions_custom):
+            self.move_to(self.gripper_init_pos_custom,None)
+            for i, joint_handle in enumerate(self.franka_joints_handle):
+                vrep.simxSetJointPosition(self.sim_client, joint_handle, self.franka_initial_joint_positions_custom[i], vrep.simx_opmode_blocking)
+
 
     # Primitives ----------------------------------------------------------
 
@@ -402,7 +427,13 @@ class Robot(object):
 
         return grasp_success
 
-    def dev_grasp_with_place(self, position, heightmap_rotation_angle, workspace_limits):
+    def dev_color_match(self,color):
+        color = color / 255.0
+        distances = np.linalg.norm(self.color_space - color, axis=1)  # Calculate Euclidean distance
+        index_of_smallest_distance = np.argmin(distances)  # Get the index of the smallest distance
+        return self.color_name[index_of_smallest_distance]
+
+    def dev_grasp_with_place(self, position, heightmap_rotation_angle, workspace_limits, color):
         print('Executing: grasp at (%f, %f, %f)' % (position[0], position[1], position[2]))
 
 
@@ -458,17 +489,22 @@ class Robot(object):
 
         # Move the grasped object elsewhere
         if grasp_success:
-            # drop_x = (self.workspace_limits[0][1] - self.workspace_limits[0][0] - 0.1) * np.random.random_sample() + \
-            #          self.workspace_limits[0][0] + 0
-            # drop_y = (self.workspace_limits[1][1] - self.workspace_limits[1][0] - 0.1) * np.random.random_sample() + \
-            #          self.workspace_limits[1][0] + 0
-            # object_position = [drop_x, drop_y, 0.31]
+            color_name = self.dev_color_match(color)
+            drop_worklimits = self.color2workshop[color_name]
+            drop_x = (drop_worklimits[0][1] - drop_worklimits[0][0] - 0.05) * np.random.random_sample() + \
+                     drop_worklimits[0][0] + 0
+            drop_y = (drop_worklimits[1][1] - drop_worklimits[1][0] - 0.1) * np.random.random_sample() + \
+                     drop_worklimits[1][0] + 0
+            object_position = [drop_x, drop_y, 0.31]
             #
             # self.place(object_position,0,workspace_limits)
             self.go_home()
             time.sleep(2)
             # self.car_dynamic_enable()
-            self.car_move_to("tar_green")
+            self.car_move_to("tar_"+color_name)
+            # target_place = self.color2place[color_name]
+            self.place(object_position, 0)
+            # self.go_home()
             time.sleep(2)
             self.car_move_to("sou")
             # self.car_dynamic_disable()
@@ -536,14 +572,15 @@ class Robot(object):
 
         return push_success
 
-    def place(self, position, heightmap_rotation_angle, workspace_limits):
+    def place(self, position, heightmap_rotation_angle, workspace_limits=None):
         print('Executing: place at (%f, %f, %f)' % (position[0], position[1], position[2]))
 
         # Compute tool orientation from heightmap rotation angle
         tool_rotation_angle = (heightmap_rotation_angle % np.pi) - np.pi/2
 
         # Avoid collision with floor
-        position[2] = max(position[2] + 0.04 + 0.02, workspace_limits[2][0] + 0.02)
+        # position[2] = max(position[2] + 0.04 + 0.02, workspace_limits[2][0] + 0.02)
+        position[2]+=0.02
 
         # Move gripper to location above place target
         place_location_margin = 0.1
@@ -563,6 +600,7 @@ class Robot(object):
         vrep.simxSetObjectOrientation(self.sim_client, UR5_target_handle, -1, (np.pi/2, tool_rotation_angle, np.pi/2), vrep.simx_opmode_blocking)
 
         # Approach place target
+        self.define_custom_home()
         self.move_to(position, None)
 
         # Ensure gripper is open
@@ -574,7 +612,7 @@ class Robot(object):
         place_success = True
 
         self.close_gripper()
-        self.go_home()
+        self.go_costom_home()
 
         return place_success
 
