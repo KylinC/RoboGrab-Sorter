@@ -169,12 +169,18 @@ class reinforcement_net(nn.Module):
         self.use_cuda = use_cuda
 
         # Initialize network trunks with DenseNet pre-trained on ImageNet
+
         self.push_color_trunk = torchvision.models.densenet.densenet121(pretrained=True)
         self.push_depth_trunk = torchvision.models.densenet.densenet121(pretrained=True)
         self.grasp_color_trunk = torchvision.models.densenet.densenet121(pretrained=True)
         self.grasp_depth_trunk = torchvision.models.densenet.densenet121(pretrained=True)
 
-        self.num_rotations = 16
+        # self.push_color_trunk = torchvision.models.resnet18(pretrained=True)
+        # self.push_depth_trunk = torchvision.models.resnet18(pretrained=True)
+        # self.grasp_color_trunk = torchvision.models.resnet18(pretrained=True)
+        # self.grasp_depth_trunk = torchvision.models.resnet18(pretrained=True)
+
+        self.num_rotations = 36
 
         # Construct network branches for pushing and grasping
         self.pushnet = nn.Sequential(OrderedDict([

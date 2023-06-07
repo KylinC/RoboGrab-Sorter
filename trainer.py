@@ -372,10 +372,10 @@ class Trainer(object):
 
         canvas = None
         num_rotations = predictions.shape[0]
-        for canvas_row in range(int(num_rotations/4)):
+        for canvas_row in range(int(num_rotations/6)):  # default the rotations_num must be a square num
             tmp_row_canvas = None
-            for canvas_col in range(4):
-                rotate_idx = canvas_row*4+canvas_col
+            for canvas_col in range(6):
+                rotate_idx = canvas_row*6+canvas_col
                 prediction_vis = predictions[rotate_idx,:,:].copy()
                 # prediction_vis[prediction_vis < 0] = 0 # assume probability
                 # prediction_vis[prediction_vis > 1] = 1 # assume probability

@@ -104,7 +104,7 @@ def main(args):
                         if best_push_conf > 2*best_grasp_conf:
                             nonlocal_variables['primitive_action'] = 'push'
                     else:
-                        if best_push_conf > 0.9*best_grasp_conf:
+                        if best_push_conf > 0.8*best_grasp_conf:
                             nonlocal_variables['primitive_action'] = 'push'
                     explore_actions = np.random.uniform() < explore_prob
                     if explore_actions: # Exploitation (do best action) vs exploration (do other action)
@@ -221,10 +221,15 @@ def main(args):
         # Get latest RGB-D image
         color_img, depth_img = robot.get_camera_data()
         depth_img = depth_img * robot.cam_depth_scale # Apply depth scale from calibration
+        # cv2.imwrite("color_img.png", color_img)
+        # cv2.imwrite("depth_img.png", depth_img)
         # print(depth_img.shape)
 
         # Get heightmap from RGB-D image (by re-projecting 3D point cloud)
         color_heightmap, depth_heightmap = utils.get_heightmap(color_img, depth_img, robot.cam_intrinsics, robot.cam_pose, workspace_limits, heightmap_resolution)
+        # cv2.imwrite("color_img_height.png", color_heightmap)
+        # cv2.imwrite("depth_img_height.png", depth_heightmap)
+
         valid_depth_heightmap = depth_heightmap.copy()
         valid_depth_heightmap[np.isnan(valid_depth_heightmap)] = 0
 
@@ -412,7 +417,7 @@ if __name__ == '__main__':
     parser.add_argument('--obj_mesh_dir', dest='obj_mesh_dir', action='store', default='objects/blocks',                  help='directory containing 3D mesh files (.obj) of objects to be added to simulation')
     parser.add_argument('--num_obj', dest='num_obj', type=int, action='store', default=10,                                help='number of objects to add to simulation')
     parser.add_argument('--heightmap_resolution', dest='heightmap_resolution', type=float, action='store', default=0.002, help='meters per pixel of heightmap')
-    parser.add_argument('--random_seed', dest='random_seed', type=int, action='store', default=42,                      help='random seed for simulation and neural net initialization')
+    parser.add_argument('--random_seed', dest='random_seed', type=int, action='store', default=1234,                      help='random seed for simulation and neural net initialization')
     parser.add_argument('--cpu', dest='force_cpu', action='store_true', default=False,                                    help='force code to run in CPU mode')
 
     # ------------- Algorithm options -------------

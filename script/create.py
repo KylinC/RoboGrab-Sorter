@@ -13,7 +13,7 @@ import utils
 
 # User options (change me)
 # --------------- Setup options ---------------
-obj_mesh_dir = os.path.abspath('objects/blocks')
+obj_mesh_dir = os.path.abspath('../objects/blocks')
 num_obj = 10
 random_seed = 1234
 workspace_limits = np.asarray([[0.5, 0.7], [-0.2, 0.2], [-0.0001, 0.32]]) # Cols: min max, Rows: y x z (define workspace limits in robot coordinates)

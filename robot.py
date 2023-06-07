@@ -13,7 +13,7 @@ class Robot(object):
 
         self.workspace_limits = workspace_limits
         # initial gripper position
-        self.gripper_init_pos = (-0.5, 0, 0.5)
+        self.gripper_init_pos = (-0.5, 0, 0.6)
         self.gripper_init_pos_custom = None
 
         # Define colors for object meshes (Tableau palette)
@@ -484,22 +484,24 @@ class Robot(object):
 
 
         # Check if grasp is successful
+        # time.sleep(1)
         gripper_full_closed = self.close_gripper()
         grasp_success = not gripper_full_closed
 
         # Move the grasped object elsewhere
         if grasp_success:
+            self.go_home()
+            time.sleep(2)
             color_name = self.dev_color_match(color)
             drop_worklimits = self.color2workshop[color_name]
-            drop_x = (drop_worklimits[0][1] - drop_worklimits[0][0] - 0.05) * np.random.random_sample() + \
+            drop_x = (drop_worklimits[0][1] - drop_worklimits[0][0] - 0.07) * np.random.random_sample() + \
                      drop_worklimits[0][0] + 0
-            drop_y = (drop_worklimits[1][1] - drop_worklimits[1][0] - 0.1) * np.random.random_sample() + \
+            drop_y = (drop_worklimits[1][1] - drop_worklimits[1][0] - 0.07) * np.random.random_sample() + \
                      drop_worklimits[1][0] + 0
             object_position = [drop_x, drop_y, 0.31]
             #
             # self.place(object_position,0,workspace_limits)
-            self.go_home()
-            time.sleep(2)
+
             # self.car_dynamic_enable()
             self.car_move_to("tar_"+color_name)
             # target_place = self.color2place[color_name]
@@ -568,12 +570,17 @@ class Robot(object):
         # Move gripper to location above grasp target
         self.move_to([target_x, target_y, location_above_pushing_point[2]], None)
 
+        # self.go_home()
+        time.sleep(2)
+
         push_success = True
 
         return push_success
 
     def place(self, position, heightmap_rotation_angle, workspace_limits=None):
         print('Executing: place at (%f, %f, %f)' % (position[0], position[1], position[2]))
+
+        self.define_custom_home()
 
         # Compute tool orientation from heightmap rotation angle
         tool_rotation_angle = (heightmap_rotation_angle % np.pi) - np.pi/2
@@ -600,7 +607,7 @@ class Robot(object):
         vrep.simxSetObjectOrientation(self.sim_client, UR5_target_handle, -1, (np.pi/2, tool_rotation_angle, np.pi/2), vrep.simx_opmode_blocking)
 
         # Approach place target
-        self.define_custom_home()
+        # self.define_custom_home()
         self.move_to(position, None)
 
         # Ensure gripper is open
